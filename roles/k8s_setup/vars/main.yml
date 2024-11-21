@@ -1,0 +1,23 @@
+---
+# vars file for k8s_setup
+kube_version: 1.27.7
+etcd_version: 3.5.9
+control_plane_endpoint: starboard.ndc.aptportfolio.com:8443
+pod_network_cidr: 10.244.0.0/16
+cni_url: https://raw.githubusercontent.com/projectcalico/calico/v3.26.3/manifests/calico.yaml
+absent_packages:
+  - runc
+ha_packages:
+  - haproxy
+  - keepalived
+k8_dependencies:
+  - iproute-tc
+  - yum-utils
+  - device-mapper-persistent-data
+  - lvm2
+  - containerd.io-1.6.24
+
+kube_packages:
+  - "kubeadm-{{ kube_version }}"
+  - "kubelet-{{ kube_version }}"
+  - "kubectl-{{ kube_version }}"

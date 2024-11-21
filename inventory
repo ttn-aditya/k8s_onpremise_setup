@@ -1,0 +1,10 @@
+[control_plane]
+
+[worker]
+
+[cluster:children]
+control_plane
+worker
+
+[all:vars]
+ansible_python_interpreter=/usr/bin/python3

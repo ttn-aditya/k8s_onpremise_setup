@@ -1,0 +1,15 @@
+---
+
+- name: Remove kube packages
+  yum:
+    name: "['{{ kube_packages }}', 'containerd.io']"
+    state: absent
+
+- name: Delete files
+  file:
+    path: "{{ item }}"
+    state: absent
+  with_items:
+    - /etc/sysconfig/kubelet
+    - "{{ containerd_mod_file_path }}"
+    - "{{ sysctl_file_path }}"

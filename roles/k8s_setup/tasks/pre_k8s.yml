@@ -1,0 +1,23 @@
+---
+# tasks file for pre_checks for k8s_setup
+- name: Disable SWAP
+  command: swapoff -a
+  when: ansible_swaptotal_mb > 0
+
+- name: Remove SWAP from fstab
+  mount:
+    name: "{{ item }}"
+    fstype: swap
+    state: absent
+  with_items:
+    - swap
+    - none
+
+- name: Disable SELINUX for current boot
+  command: setenforce 0
+  when: ansible_selinux.status != "disabled"
+
+- name: Disable SELINUX permanently
+  selinux:
+    policy: targeted
+    state: disabled

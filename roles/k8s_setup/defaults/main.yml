@@ -1,0 +1,6 @@
+---
+# defaults file for k8s_setup
+sysctl_file_path: "/etc/sysctl.d/99-kubernetes-cri.conf"
+containerd_mod_file_path: "/etc/modules-load.d/containerd.conf"
+kube_env:
+  KUBECONFIG: /etc/kubernetes/admin.conf

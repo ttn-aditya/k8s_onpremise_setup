@@ -1,0 +1,58 @@
+---
+# tasks file for containerd setup
+
+- name: Remove packages
+  yum:
+    name: "{{ absent_packages }}"
+    state: absent
+    update_cache: true
+
+- name: Install k8_dependencies
+  yum:
+    name: "{{ k8_dependencies }}"
+    state: present
+    update_cache: true
+
+- name: Add modules for containerd
+  copy:
+    dest: "{{ containerd_mod_file_path }}"
+    mode: 0644
+    content: |
+      overlay
+      br_netfilter
+
+- name: Load modules for containerd
+  modprobe:
+    state: present
+    name: "{{ item }}"
+  with_items:
+    - overlay
+    - br_netfilter
+
+- name: Enable bridge-nf-call tables and ip forwarding
+  sysctl:
+    name: "{{ item }}"
+    state: present
+    sysctl_file: "{{ sysctl_file_path }}"
+    value: "1"
+    reload: yes
+  with_items:
+    - net.bridge.bridge-nf-call-iptables
+    - net.bridge.bridge-nf-call-ip6tables
+    - net.ipv4.ip_forward
+
+- name: Copy containerd config file
+  copy:
+    src: config.toml
+    dest: /etc/containerd/config.toml
+  notify: restart containerd
+
+- name: Flush handlers
+  meta: flush_handlers
+
+- name: Ensure containerd is started and enabled
+  systemd:
+    name: containerd
+    daemon_reload: yes
+    state: started
+    enabled: yes

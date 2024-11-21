@@ -1,0 +1,97 @@
+---
+# tasks file for k8s_setup
+
+- name: Configure Yum repo for kubernetes
+  yum_repository:
+    name: kubernetes
+    description: repo for k8s
+    baseurl: "https://pkgs.k8s.io/core:/stable:/v{{ kube_version | regex_replace('^([0-9]+.[0-9]+).*$', '\\1') }}/rpm/"
+    enabled: yes
+    gpgcheck: yes
+    gpgkey: "https://pkgs.k8s.io/core:/stable:/v{{ kube_version | regex_replace('^([0-9]+.[0-9]+).*$', '\\1') }}/rpm/repodata/repomd.xml.key"
+    exclude: kubelet kubeadm kubectl cri-tools kubernetes-cni
+
+- name: Install kubernetes
+  yum:
+    name: "{{ kube_packages }}"
+    state: present
+    update_cache: true
+    disable_excludes: kubernetes
+
+- name: Install etcd on controlplane node
+  ansible.builtin.unarchive:
+    src: "https://storage.googleapis.com/etcd/v{{ etcd_version }}/etcd-v{{ etcd_version }}-linux-amd64.tar.gz"
+    dest: /usr/bin/
+    remote_src: yes
+    exclude: [ README*, Documentation, etcd ]
+    extra_opts: [--strip-components=1]
+  when: "'control_plane' in group_names"
+
+- name: Copy kubelet config file
+  copy:
+    src: kubelet
+    dest: /etc/sysconfig/kubelet
+  notify: restart kubelet
+
+- name: Block Initialise cluster
+  tags: [ init, never ]
+  block:
+    - name: Check if cluster already initialised
+      stat:
+        path: /etc/kubernetes/admin.conf
+      register: kube_config
+
+    - name: Initialise cluster
+      command: "kubeadm init --control-plane-endpoint {{ control_plane_endpoint }} --pod-network-cidr {{ pod_network_cidr }} --upload-certs"
+      when: not kube_config.stat.exists
+
+    - name: Install CNI
+      shell: "kubectl apply -f {{ cni_url }}"
+      environment: "{{ kube_env }}"
+      when: not kube_config.stat.exists
+
+- name: Block Master/Worker
+  block:
+    - name: Check if host already joined cluster
+      shell: "kubectl get nodes {{ inventory_hostname }}"
+      register: host_ready
+      changed_when: false
+      environment: "{{ kube_env }}"
+      delegate_to: "{{ groups['control_plane'][0] }}"
+      ignore_errors: True
+
+    - name: Get token for joining node to cluster
+      command: kubeadm token create  --print-join-command
+      delegate_to: "{{ groups['control_plane'][0] }}"
+      register: join_command
+      when: not host_ready.stdout
+
+    - name: Join worker node to the cluster.
+      command: "{{ join_command.stdout }}"
+      when:
+        - not ansible_check_mode
+        - not host_ready.stdout
+        - "'worker' in group_names"
+
+    - name: Get certificate-key for joining the control plain node
+      shell: "kubeadm init phase upload-certs --upload-certs | grep -v upload"
+      delegate_to: "{{ groups['control_plane'][0] }}"
+      register: certificate_key
+      when:
+        - not ansible_check_mode
+        - not host_ready.stdout
+        - "'control_plane' in group_names"
+
+    - name: Join control plain node to the cluster
+      command: "{{ join_command.stdout }} --control-plane --certificate-key {{ certificate_key.stdout }}"
+      when:
+        - not ansible_check_mode
+        - not host_ready.stdout
+        - "'control_plane' in group_names"
+  when: kube_config.stat is not defined
+
+- name: Ensure kubelet is started and enabled
+  systemd:
+    name: kubelet
+    state: started
+    enabled: yes

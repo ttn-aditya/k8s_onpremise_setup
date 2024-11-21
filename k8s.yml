@@ -1,0 +1,6 @@
+---
+- name: Add host to K8-cluster
+  hosts: cluster
+  become: yes
+  roles:
+    - k8s_setup

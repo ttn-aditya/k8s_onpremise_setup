@@ -1,0 +1,42 @@
+---
+# tasks file to reset for k8s_setup
+- name: check if node exist on cluster
+  shell: "kubectl get nodes {{ inventory_hostname }}"
+  register: host_flag
+  delegate_to: "{{ groups['control_plane'][0] }}"
+  changed_when: false
+  ignore_errors: True
+  environment: "{{ kube_env }}"
+
+- name: drain node
+  shell: "kubectl drain {{ inventory_hostname }} --ignore-daemonsets --delete-local-data"
+  delegate_to: "{{ groups['control_plane'][0] }}"
+  environment: "{{ kube_env }}"
+  when:
+    - not ansible_check_mode
+    - host_flag.stdout
+
+- name: delete node from cluster
+  command: kubectl delete node {{ inventory_hostname }}
+  delegate_to: "{{ groups['control_plane'][0] }}"
+  environment: "{{ kube_env }}"
+  when:
+    - not ansible_check_mode
+    - host_flag.stdout
+      
+- name: reset kubeadm
+  command: kubeadm reset --force
+
+- name: delete files
+  file:
+    path: "{{ item }}"
+    state: absent
+  with_items:
+    - /etc/cni/net.d
+    - /etc/kubernetes
+    - /root/.kube
+
+- name: Remove HA packages
+  yum:
+    name: "{{ ha_packages }}"
+    state: absent
