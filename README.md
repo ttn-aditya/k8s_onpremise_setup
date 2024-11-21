@@ -31,7 +31,7 @@ Sample Playbook
 ----------------
 *sample.yml*
 
-    - hosts: ninjax.ndc.aptportfolio.com
+    - hosts: ninjax
       become: yes
       roles:
          - k8s_setup
